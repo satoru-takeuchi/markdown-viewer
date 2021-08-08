@@ -1,0 +1,7 @@
+apiVersion: view.satoru-takeuchi.github.io/v1
+kind: MarkDownView
+metadata:
+  name: markdownview-sample
+spec:
+  # Add fields here
+  foo: bar
