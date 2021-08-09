@@ -19,6 +19,9 @@ package controllers
 import (
 	"context"
 
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -53,6 +56,35 @@ func (r *MarkDownViewReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	_ = log.FromContext(ctx)
 
 	// your logic here
+	logger := log.FromContext(ctx)
+
+	var mdView viewv1.MarkDownView
+	err := r.Get(ctx, req.NamespacedName, &mdView)
+	if errors.IsNotFound(err) {
+		r.removeMetrics(mdView)
+		return ctrl.Result{}, nil
+	}
+	if err != nil {
+		logger.Error(err, "unable to get MarkDownView", "name", req.NamespacedName)
+		return ctrl.Result{}, err
+	}
+
+	if !mdView.ObjectMeta.DeletionTimestamp.IsZero() {
+		return ctrl.Result{}, nil
+	}
+
+	err = r.reconcileConfigMap(ctx, mdView)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	err = r.reconcileDeployment(ctx, mdView)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	err = r.reconcileService(ctx, mdView)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -61,5 +93,8 @@ func (r *MarkDownViewReconciler) Reconcile(ctx context.Context, req ctrl.Request
 func (r *MarkDownViewReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&viewv1.MarkDownView{}).
+		Owns(&corev1.ConfigMap{}).
+		Owns(&appsv1.Deployment{}).
+		Owns(&corev1.Service{}).
 		Complete(r)
 }
