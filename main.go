@@ -335,3 +335,38 @@ func patchApplyConfig(ctx context.Context, cli clientClient) error {
 	})
 	return err
 }
+
+func updateStatus(ctx context.Context, cli client.Client) error {
+	var dep appsv1.Deployment
+	err := cli.Get(ctx, client.ObjectKey{Namespace: "default", Name: "sample"}, &dep)
+	if err != nil {
+		return err
+	}
+
+	dep.Status.AvailableReplicas = 3
+	err = cli.Status().Update(ctx, &dep)
+	return err
+}
+
+func deleteWithPreConditions(ctx context.Context, cli client.Client) error {
+	var deploy appsv1.Deployment
+	err := cli.Get(ctx, client.ObjectKey{Namespace: "default", Name: "sample"}, &deploy)
+	if err != nil {
+		return err
+	}
+	uid := deploy.GetUID()
+	resourceVersion := deploy.GetResourceVersion()
+	cond := metav1.Preconditions{
+		UID: &uid,
+		ResourceVersion: &resourceVersion,
+	}
+	err = cli.Delete(ctx, &deploy, &client.DeleteOptions{
+		Preconditions: &cond,
+	})
+	return err
+}
+
+func deleteAllOfDeployment(ctx context.Context, cli client.Client) error {
+	err := cli.DeleteAllOf(ctx, &appsv1.Deployment{}m client.InNamespace("default"))
+	return err
+}
