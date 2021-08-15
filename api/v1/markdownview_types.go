@@ -30,7 +30,7 @@ type MarkDownViewSpec struct {
 	// The value is the content in markdown format.
 	//+kubebuilder:validation:Required
 	//+kubebuilder:validation:MinItems=1
-	MarkDowns []map[string]string `json:"markDowns,omitempty"`
+	MarkDowns map[string]string `json:"markDowns,omitempty"`
 
 	// Replicas is the number of viewers.
 	// +kubebuilder:default=1

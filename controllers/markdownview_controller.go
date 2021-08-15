@@ -19,12 +19,20 @@ package controllers
 import (
 	"context"
 
+	"github.com/satoru-takeuchi/markdown-viewer/pkg/constants"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/pointer"
+
+	corev1apply "k8s.io/client-go/applyconfigurations/core/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	viewv1 "github.com/satoru-takeuchi/markdown-viewer/api/v1"
@@ -53,8 +61,6 @@ type MarkDownViewReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
 func (r *MarkDownViewReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
-
 	// your logic here
 	logger := log.FromContext(ctx)
 
@@ -97,4 +103,89 @@ func (r *MarkDownViewReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.Service{}).
 		Complete(r)
+}
+
+func (r *viewv1.MarkDownViewReconciler) reconcileConfigMap(ctx context.Context, mdView viewv1.MarkDownView) error {
+	logger := log.FromContext(ctx)
+
+	cm := &corev1.ConfigMap{}
+	cm.SetNamespace(mdView.Namespace)
+	cm.SetName("markdowns-" + mdView.Name)
+
+	op, err := ctrl.CreateOrUpdate(ctx, r.Client, cm, func() error {
+		if cm.Data == nil {
+			cm.Data = make(map[string]string)
+		}
+		for name, content := range mdView.Spec.MarkDowns {
+			cm.Data[name] = content
+		}
+		return ctrl.SetControllerReference(&mdView, cm, r.Scheme)
+	})
+
+	if err != nil {
+		logger.Error(err, "unable to create or update ConfigMap")
+		return err
+	}
+	if op != controllerutil.OperationResultNone {
+		logger.Info("reconcile ConfigMap succeeded", "op", op)
+	}
+	return nil
+}
+
+func (r *MarkDownViewReconciler) reconcileService(ctx context.Context, mdView viewv1.MarkDownView) error {
+	logger := log.FromContext(ctx)
+	svcName := "viewer-" + mdView.Name
+
+	owner, err := ownerRef(mdView, r.Scheme)
+	if err != nil {
+		return err
+	}
+
+	svc := corev1apply.Service(svcName, mdView.Namespace).
+		WithLabels(labelSet(mdView)).
+		WithOwnerReference(owner).
+		WithSpec(corev1apply.ServiceSpec().
+			WithSelector(labelSet(mdView)).
+			WithType(corev1.ServiceTypeClusterIP).
+			WithPorts(corev1apply.ServicePort().
+				WithProtocol(corev1.ProtocolTCP).
+				WithPort(80).
+				WithTargetPort(intstr.FromInt(3000)),
+			),
+		)
+
+	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(svc)
+	if err != nil {
+		return err
+	}
+	patch := &unstructured.Unstructured{
+		Object: obj,
+	}
+
+	var current corev1.Service
+	err = r.Get(ctx, client.ObjectKey{Namespace: mdView.Namespace, Name: svcName}, &current)
+	if err != nil && !errors.IsNotFound(err) {
+		return err
+	}
+
+	currApplyConfig, err := corev1apply.ExtractService(&current, constants.ControllerName)
+	if err != nil {
+		return err
+	}
+
+	if equality.Semantic.DeepEqual(svc, currApplyConfig) {
+		return nil
+	}
+
+	err = r.Patch(ctx, patch, client.Apply, &client.PatchOptions{
+		FieldManager: constants.ControllerName,
+		Force:        pointer.Bool(true),
+	})
+	if err != nil {
+		logger.Error(err, "unable to create or update Service")
+		return err
+	}
+
+	logger.Info("reconcile Service succeeded", "name", mdView.Name)
+	return nil
 }

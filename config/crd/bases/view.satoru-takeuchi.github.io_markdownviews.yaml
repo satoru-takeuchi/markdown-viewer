@@ -44,15 +44,12 @@ spec:
             description: MarkDownViewSpec defines the desired state of MarkDownView
             properties:
               markDowns:
+                additionalProperties:
+                  type: string
                 description: MarkDowns contain the markdown files you want to display.
                   The key indicates the file name and must not overlap with the the
-                  keys. The value is the content in markdown format.
-                items:
-                  additionalProperties:
-                    type: string
-                  type: object
-                minItems: 1
-                type: array
+                  keys. The value is the content in markdown format.                
+                type: object
               replicas:
                 default: 1
                 description: Replicas is the number of viewers.
