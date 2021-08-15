@@ -18,7 +18,6 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -34,6 +33,7 @@ import (
 	metav1apply "k8s.io/client-go/applyconfigurations/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -70,7 +70,6 @@ func (r *MarkDownViewReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	var mdView viewv1.MarkDownView
 	err := r.Get(ctx, req.NamespacedName, &mdView)
 	if errors.IsNotFound(err) {
-		r.removeMetrics(mdView)
 		return ctrl.Result{}, nil
 	}
 	if err != nil {
@@ -108,7 +107,7 @@ func (r *MarkDownViewReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *viewv1.MarkDownViewReconciler) reconcileConfigMap(ctx context.Context, mdView viewv1.MarkDownView) error {
+func (r *MarkDownViewReconciler) reconcileConfigMap(ctx context.Context, mdView viewv1.MarkDownView) error {
 	logger := log.FromContext(ctx)
 
 	cm := &corev1.ConfigMap{}
@@ -146,7 +145,7 @@ func (r *MarkDownViewReconciler) reconcileService(ctx context.Context, mdView vi
 
 	svc := corev1apply.Service(svcName, mdView.Namespace).
 		WithLabels(labelSet(mdView)).
-		WithOwnerReference(owner).
+		WithOwnerReferences(owner).
 		WithSpec(corev1apply.ServiceSpec().
 			WithSelector(labelSet(mdView)).
 			WithType(corev1.ServiceTypeClusterIP).
@@ -193,7 +192,7 @@ func (r *MarkDownViewReconciler) reconcileService(ctx context.Context, mdView vi
 	return nil
 }
 
-func (r *MarkdownViewReconciler) reconcileDeployment(ctx context.Context, mdView viewv1.MarkdownView) error {
+func (r *MarkDownViewReconciler) reconcileDeployment(ctx context.Context, mdView viewv1.MarkDownView) error {
 	logger := log.FromContext(ctx)
 
 	depName := "viewer-" + mdView.Name
@@ -310,11 +309,6 @@ func (r *MarkDownViewReconciler) updateStatus(ctx context.Context, mdView viewv1
 
 	if mdView.Status != status {
 		mdView.Status = status
-		r.setMetrics(mdView)
-
-		r.Recorder.Event(&mdView, corev1.EventTypeNormal, "Updated",
-			fmt.Sprintf("MarkDownView(%s:%s) updated: %s",
-				mdView.Namespace, mdView.Name, mdView.Status))
 
 		err = r.Status().Update(ctx, &mdView)
 		if err != nil {
@@ -326,4 +320,28 @@ func (r *MarkDownViewReconciler) updateStatus(ctx context.Context, mdView viewv1
 		return ctrl.Result{Requeue: true}, nil
 	}
 	return ctrl.Result{}, nil
+}
+
+func ownerRef(mdView viewv1.MarkDownView, scheme *runtime.Scheme) (*metav1apply.OwnerReferenceApplyConfiguration, error) {
+	gvk, err := apiutil.GVKForObject(&mdView, scheme)
+	if err != nil {
+		return nil, err
+	}
+	ref := metav1apply.OwnerReference().
+		WithAPIVersion(gvk.GroupVersion().String()).
+		WithKind(gvk.Kind).
+		WithName(mdView.Name).
+		WithUID(mdView.GetUID()).
+		WithBlockOwnerDeletion(true).
+		WithController(true)
+	return ref, nil
+}
+
+func labelSet(mdView viewv1.MarkDownView) map[string]string {
+	labels := map[string]string{
+		constants.LabelAppName:      constants.ViewerName,
+		constants.LabelAppInstance:  mdView.Name,
+		constants.LabelAppCreatedBy: constants.ControllerName,
+	}
+	return labels
 }
