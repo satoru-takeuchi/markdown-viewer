@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/satoru-takeuchi/markdown-viewer/pkg/constants"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/equality"
@@ -39,6 +38,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	viewv1 "github.com/satoru-takeuchi/markdown-viewer/api/v1"
+	"github.com/satoru-takeuchi/markdown-viewer/pkg/constants"
 )
 
 // MarkDownViewReconciler reconciles a MarkDownView object
