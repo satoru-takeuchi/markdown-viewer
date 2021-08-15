@@ -24,6 +24,8 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+	"k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -266,16 +268,16 @@ func patchApply(ctx context.Context, cli client.CLient) error {
 				"app": "nginx",
 			},
 		},
-		"template": map[string]interface{} {
-			"metadata": map[string]interface{} {
-				"labels"] map[string]string{
+		"template": map[string]interface{}{
+			"metadata": map[string]interface{}{
+				"labels": map[string]string{
 					"app": "nginx",
 				},
 			},
-			"spec": map[string]interface{} {
+			"spec": map[string]interface{}{
 				"containers": []interface{}{
-					map[string]interface{} {
-						"name": "nginx",
+					map[string]interface{}{
+						"name":  "nginx",
 						"image": "nginx:latest",
 					},
 				},
@@ -285,7 +287,7 @@ func patchApply(ctx context.Context, cli client.CLient) error {
 
 	err := cli.Patch(ctx, patch, client.Apply, &client.PatchOptions{
 		FieldManager: "client-sample",
-		Force: pointer.Bool(true),
+		Force:        pointer.Bool(true),
 	})
 	return err
 }
@@ -305,7 +307,7 @@ func patchApplyConfig(ctx context.Context, cli clientClient) error {
 				),
 			),
 		)
-	
+
 	obj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(dep)
 	if err != nil {
 		return err
@@ -320,7 +322,7 @@ func patchApplyConfig(ctx context.Context, cli clientClient) error {
 		return err
 	}
 
-	currApplyConfig, err := appsv1apply.ExtractDeployment(&current, "client-sample") 
+	currApplyConfig, err := appsv1apply.ExtractDeployment(&current, "client-sample")
 	if err != nil {
 		return nil
 	}
@@ -331,7 +333,7 @@ func patchApplyConfig(ctx context.Context, cli clientClient) error {
 
 	err = cli.Patch(ctx, patch, client.Apply, &client.PatchOptions{
 		FieldManager: "client-sample",
-		Force: pointer.Bool(true),
+		Force:        pointer.Bool(true),
 	})
 	return err
 }
@@ -357,7 +359,7 @@ func deleteWithPreConditions(ctx context.Context, cli client.Client) error {
 	uid := deploy.GetUID()
 	resourceVersion := deploy.GetResourceVersion()
 	cond := metav1.Preconditions{
-		UID: &uid,
+		UID:             &uid,
 		ResourceVersion: &resourceVersion,
 	}
 	err = cli.Delete(ctx, &deploy, &client.DeleteOptions{
@@ -367,6 +369,6 @@ func deleteWithPreConditions(ctx context.Context, cli client.Client) error {
 }
 
 func deleteAllOfDeployment(ctx context.Context, cli client.Client) error {
-	err := cli.DeleteAllOf(ctx, &appsv1.Deployment{}m client.InNamespace("default"))
+	err := cli.DeleteAllOf(ctx, &appsv1.Deployment{}, client.InNamespace("default"))
 	return err
 }

@@ -48,7 +48,7 @@ spec:
                   type: string
                 description: MarkDowns contain the markdown files you want to display.
                   The key indicates the file name and must not overlap with the the
-                  keys. The value is the content in markdown format.                
+                  keys. The value is the content in markdown format.
                 type: object
               replicas:
                 default: 1
