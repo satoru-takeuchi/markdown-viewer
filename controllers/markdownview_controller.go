@@ -95,7 +95,7 @@ func (r *MarkDownViewReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, err
 	}
 
-	return ctrl.Result{}, nil
+	return r.updateStatus(ctx, mdView)
 }
 
 // SetupWithManager sets up the controller with the Manager.
